@@ -1,0 +1,24 @@
+Received: from mx.receiver.com (mx.receiver.com [198.51.100.10])
+	by inbox.receiver.com (Postfix) with ESMTP id 7F3A1C
+	for <alice@receiver.com>; Fri, 17 Jul 2026 10:21:02 +0530
+Received: from smtp.fake-bank.com (unknown [203.0.113.45])
+	by mx.receiver.com (Postfix) with ESMTP id 55C9B2
+	for <alice@receiver.com>; Fri, 17 Jul 2026 10:20:58 +0530
+From: "Secure Bank Alert" <support@fake-bank.com>
+Reply-To: helpdesk@evil-scam.net
+To: alice@receiver.com
+Subject: URGENT!!! Verify your account now to avoid closure
+Date: Fri, 17 Jul 2026 10:20:50 +0530
+Message-ID: <9c1f2e3d@fake-bank.com>
+X-Mailer: Bulk Mailer Pro 3.0
+Content-Type: text/plain
+
+Dear Customer,
+
+We noticed unusual activity in your account. Click the link below and
+enter your password and OTP immediately to verify your account:
+
+http://evil-scam.net/verify-login
+
+Regards,
+Secure Bank Team

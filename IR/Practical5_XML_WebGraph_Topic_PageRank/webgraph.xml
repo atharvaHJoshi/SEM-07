@@ -1,0 +1,24 @@
+<web>
+  <page id="A" topic="news">
+    <link to="B"/>
+    <link to="C"/>
+  </page>
+  <page id="B" topic="sports">
+    <link to="C"/>
+    <link to="D"/>
+  </page>
+  <page id="C" topic="sports">
+    <link to="A"/>
+  </page>
+  <page id="D" topic="sports">
+    <link to="B"/>
+    <link to="E"/>
+  </page>
+  <page id="E" topic="news">
+    <link to="C"/>
+  </page>
+  <page id="F" topic="health">
+    <link to="E"/>
+    <link to="A"/>
+  </page>
+</web>

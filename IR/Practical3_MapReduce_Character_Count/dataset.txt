@@ -1,0 +1,3 @@
+In 2026, Data Science & Information Retrieval are popular subjects!
+Students love Python3, Hadoop, MapReduce, and Big-Data tools.
+The quick brown fox jumps over the lazy dog -- 123 times.
