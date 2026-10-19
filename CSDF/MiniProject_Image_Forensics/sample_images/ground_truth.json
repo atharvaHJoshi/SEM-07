@@ -1,0 +1,12 @@
+{
+  "original": "original.jpg",
+  "tampered": "tampered.jpg",
+  "copy_resized": "copy_resized.jpg",
+  "tamper_box": [
+    560,
+    445,
+    760,
+    560
+  ],
+  "description": "A patch of grass was replaced with a region taken from a different (noisier) source, re-compressed at quality 55 and pasted back; the file was then saved with GIMP metadata and no camera information."
+}

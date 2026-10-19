@@ -9,6 +9,9 @@ env/
 # Captcha output
 CSDF/Practical2_CAPTCHA/captcha_output*.png
 
+# Image forensics reports / generated output
+CSDF/MiniProject_Image_Forensics/output/
+
 # OS / editor junk
 .DS_Store
 Thumbs.db

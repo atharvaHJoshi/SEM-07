@@ -4,9 +4,10 @@
 #
 #  Usage:
 #    ./run_all.sh          -> run everything
-#    ./run_all.sh csdf     -> only CSDF practicals
+#    ./run_all.sh csdf     -> only CSDF practicals + CSDF mini project
 #    ./run_all.sh ir       -> only IR practicals
 #    ./run_all.sh project  -> only the IR mini-project (document summarizer)
+#    ./run_all.sh csdf-project -> only the CSDF mini-project (image forensics)
 # ---------------------------------------------------------------
 
 cd "$(dirname "$0")" || exit 1
@@ -21,9 +22,21 @@ section() {
 }
 
 run() {
-    echo "\$ python3 $1"
+    echo "\$ python3 $*"
     echo
-    python3 "$1"
+    python3 "$@"
+    status=$?
+    if [ $status -ne 0 ]; then
+        echo
+        echo "!! this script exited with error code $status"
+    fi
+}
+
+run_csdf_mini_project() {
+    section "CSDF Mini Project : Digital Image Forensics Tool"
+    echo "\$ CSDF/MiniProject_Image_Forensics/run_demo.sh"
+    echo
+    CSDF/MiniProject_Image_Forensics/run_demo.sh
     status=$?
     if [ $status -ne 0 ]; then
         echo
@@ -51,6 +64,8 @@ run_csdf() {
 
     section "CSDF Practical 3 : Detect WiFi Password-Cracking Attempt"
     run "CSDF/Practical3_WiFi_Intrusion_Detection/wifi_intrusion_detection.py"
+
+    run_csdf_mini_project
 }
 
 run_ir() {
@@ -75,12 +90,17 @@ run_project() {
     run "IR/MiniProject_Document_Summarization/summarizer.py"
 }
 
+run_csdf_project() {
+    run_csdf_mini_project
+}
+
 case "$WHICH" in
-    csdf)    run_csdf ;;
-    ir)      run_ir ;;
-    project) run_project ;;
-    all)     run_csdf; run_ir; run_project ;;
-    *)       echo "usage: $0 [csdf|ir|project|all]"; exit 1 ;;
+    csdf)          run_csdf ;;
+    csdf-project)  run_csdf_project ;;
+    ir)            run_ir ;;
+    project)       run_project ;;
+    all)           run_csdf; run_ir; run_project ;;
+    *)             echo "usage: $0 [csdf|csdf-project|ir|project|all]"; exit 1 ;;
 esac
 
 echo
