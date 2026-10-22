@@ -1,7 +1,7 @@
 """
 Practical 4 : Simple web crawler
-Aim         : Visit a website, follow the links found on its pages and
-              print every page visited (breadth-first, with a depth limit).
+Aim         : Visit a website, follow the links found on its pages and print
+              every page visited (breadth-first, with a depth limit).
 Usage       : python3 web_crawler.py [start_url]
 """
 
@@ -10,8 +10,9 @@ from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
-START_URL = sys.argv[1] if len(sys.argv) > 1 else "https://example.com"
+START_URL = sys.argv[1] if len(sys.argv) > 1 else "https://quotes.toscrape.com/"
 MAX_PAGES = 5        # stop after visiting this many pages
+MAX_DEPTH = 2        # do not follow links deeper than this
 
 
 class LinkFinder(HTMLParser):
@@ -40,6 +41,12 @@ def get_page(url):
 
 
 def main():
+    print("Simple Web Crawler")
+    print("Start URL :", START_URL)
+    print("Max pages :", MAX_PAGES)
+    print("Max depth :", MAX_DEPTH)
+    print("-" * 60)
+
     visited = set()             # pages already seen
     queue = [(START_URL, 0)]    # (url, depth) pairs still to visit
     start_domain = urlparse(START_URL).netloc
@@ -64,11 +71,12 @@ def main():
             full_url = full_url.split("#")[0]      # remove #section part
 
             # stay on the same website and do not go deeper than 2 levels
-            if urlparse(full_url).netloc == start_domain and depth < 2:
+            if urlparse(full_url).netloc == start_domain and depth < MAX_DEPTH:
                 if full_url not in visited:
                     queue.append((full_url, depth + 1))
 
-    print("\nPages visited:", len(visited))
+    print("-" * 60)
+    print("Pages visited:", len(visited))
 
 
 if __name__ == "__main__":

@@ -32,16 +32,27 @@ def cosine_similarity(count1, count2):
 
 
 def main():
-    words1 = words_in(DOC1.read_text())
-    words2 = words_in(DOC2.read_text())
+    text1 = DOC1.read_text().strip()
+    text2 = DOC2.read_text().strip()
+
+    words1 = words_in(text1)
+    words2 = words_in(text2)
 
     count1 = Counter(words1)      # word -> how many times it appears
     count2 = Counter(words2)
 
     similarity = cosine_similarity(count1, count2)
+    common_words = sorted(set(count1) & set(count2))
 
-    print("Document 1 :", DOC1.name, "-", len(words1), "words")
+    print("Text being checked")
+    print("=" * 60)
+    print(f"\nDocument 1 ({DOC1.name}):\n{text1}")
+    print(f"\nDocument 2 ({DOC2.name}):\n{text2}")
+    print("\n" + "=" * 60)
+
+    print("\nDocument 1 :", DOC1.name, "-", len(words1), "words")
     print("Document 2 :", DOC2.name, "-", len(words2), "words")
+    print("Common words :", len(common_words), "->", ", ".join(common_words))
     print(f"\nCosine similarity = {similarity:.4f}  ({similarity * 100:.2f} %)")
 
     if similarity > 0.8:

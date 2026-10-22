@@ -25,5 +25,10 @@ Or run all five at once from here: `../run_all.sh ir`
 The mini-project runs with: `../run_all.sh project`
 
 All programs use only Python's standard library (no extra installation).
-Practical 4 needs internet and by default crawls `https://example.com`;
-you can pass any URL as an argument.
+Practical 4 needs internet and by default crawls
+`https://quotes.toscrape.com/`; you can pass any URL as an argument.
+
+## Outputs
+
+The actual output of every practical, with an explanation of each result, is
+documented in [`OUTPUTS.md`](OUTPUTS.md).
