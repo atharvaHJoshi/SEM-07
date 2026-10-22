@@ -12,6 +12,8 @@ Semester 7 (2026-27 BE Sem-I) practicals for **Laboratory Practice III** and
 Each subject folder has its own README with details on every practical.
 For a single-file walkthrough of the CSDF and IR practicals — theory, code, and
 outputs — see [`ALL_PRACTICALS_EXPLAINED.md`](ALL_PRACTICALS_EXPLAINED.md).
+For a shorter revision-oriented version, see
+[`PRACTICALS_STUDY_GUIDE.md`](PRACTICALS_STUDY_GUIDE.md).
 
 ## Contents
 
