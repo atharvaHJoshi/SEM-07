@@ -19,7 +19,7 @@ outputs — see [`ALL_PRACTICALS_EXPLAINED.md`](ALL_PRACTICALS_EXPLAINED.md).
 |---------|-----------|
 | LP3 — DAA | 1. Fibonacci · 2. Huffman coding · 3. 0/1 Knapsack · 4. N-Queens · 5. Quick sort · Mini-project: Naive vs Rabin-Karp string matching |
 | LP3 — ML | 1. Uber fare prediction · 2. Email spam classification · 3. Bank churn neural network · 4. Gradient descent · 5. K-Means clustering · Mini-project: Titanic survival prediction |
-| CSDF | 1. Email header analysis · 2. CAPTCHA generation & verification · 3. WiFi intrusion detection · Mini-project: Digital image forensics tool |
+| CSDF | 1. Email header analysis · 2. CAPTCHA generation & verification · 3. WiFi intrusion detection · 4. Deleted file & partition recovery · 5. Log capture & event correlation · Mini-project: Digital image forensics tool |
 | IR | 1. Document similarity · 2. PageRank · 3. Map-Reduce character count · 4. Web crawler · 5. XML web graph + topic PageRank · Mini-project: document summarization |
 
 The LP-III Blockchain practicals (Group C) are intentionally not included;
@@ -60,6 +60,8 @@ Or run any individual script directly, e.g.:
 
 ```bash
 python3 CSDF/Practical1_Email_Header_Analysis/email_header_analysis.py
+python3 CSDF/Practical4_Deleted_File_Partition_Recovery/forensic_recovery.py
+python3 CSDF/Practical5_Log_Capture_Event_Correlation/log_capture_correlation.py
 python3 CSDF/MiniProject_Image_Forensics/image_forensics.py --demo
 ```
 

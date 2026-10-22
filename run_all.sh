@@ -65,6 +65,12 @@ run_csdf() {
     section "CSDF Practical 3 : Detect WiFi Password-Cracking Attempt"
     run "CSDF/Practical3_WiFi_Intrusion_Detection/wifi_intrusion_detection.py"
 
+    section "CSDF Practical 4 : Recover Deleted Files and Deleted Partitions"
+    run "CSDF/Practical4_Deleted_File_Partition_Recovery/forensic_recovery.py"
+
+    section "CSDF Practical 5 : Log Capturing and Event Correlation"
+    run "CSDF/Practical5_Log_Capture_Event_Correlation/log_capture_correlation.py"
+
     run_csdf_mini_project
 }
 

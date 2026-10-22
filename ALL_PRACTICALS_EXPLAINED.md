@@ -8,7 +8,7 @@ The repository contains two subjects:
 
 | Subject | Full form | Practicals |
 |---|---|---|
-| **CSDF** | Cyber Security and Digital Forensics | 1. Email header analysis<br>2. CAPTCHA generation & verification<br>3. WiFi intrusion detection<br>Mini project: Digital image forensics tool |
+| **CSDF** | Cyber Security and Digital Forensics | 1. Email header analysis<br>2. CAPTCHA generation & verification<br>3. WiFi intrusion detection<br>4. Deleted file & partition recovery<br>5. Log capture & event correlation<br>Mini project: Digital image forensics tool |
 | **IR** | Information Retrieval | 1. Document similarity<br>2. PageRank<br>3. Map-Reduce character count<br>4. Web crawler<br>5. XML web graph + topic PageRank<br>Mini project: Document summarization |
 
 ---
@@ -19,6 +19,8 @@ The repository contains two subjects:
 - [CSDF Practical 1 — Email header analysis](#csdf-practical-1--email-header-analysis)
 - [CSDF Practical 2 — CAPTCHA generation and verification](#csdf-practical-2--captcha-generation-and-verification)
 - [CSDF Practical 3 — WiFi intrusion detection](#csdf-practical-3--wifi-intrusion-detection)
+- [CSDF Practical 4 — Deleted file and partition recovery](#csdf-practical-4--deleted-file-and-partition-recovery)
+- [CSDF Practical 5 — Log capture and event correlation](#csdf-practical-5--log-capture-and-event-correlation)
 - [CSDF Mini Project — Digital image forensics tool](#csdf-mini-project--digital-image-forensics-tool)
 - [IR Practical 1 — Document similarity](#ir-practical-1--document-similarity)
 - [IR Practical 2 — PageRank](#ir-practical-2--pagerank)
@@ -53,6 +55,15 @@ PRACTICALS/
 │   ├── Practical3_WiFi_Intrusion_Detection/
 │   │   ├── wifi_intrusion_detection.py
 │   │   └── wifi_log.txt               # simulated access-point log
+│   ├── Practical4_Deleted_File_Partition_Recovery/
+│   │   ├── forensic_recovery.py       # Practical 4
+│   │   ├── disk_image.dd              # generated FAT16 evidence image
+│   │   ├── recovered/                 # recovered files + repaired MBR
+│   │   └── recovery_report.json       # generated JSON report
+│   ├── Practical5_Log_Capture_Event_Correlation/
+│   │   ├── log_capture_correlation.py # Practical 5
+│   │   ├── logs/                      # auth, firewall and web logs
+│   │   └── output/                    # captured events + correlation report
 │   └── MiniProject_Image_Forensics/
 │       ├── image_forensics.py         # main tool
 │       ├── make_samples.py            # synthetic evidence generator
@@ -91,6 +102,8 @@ PRACTICALS/
 | CSDF 1 (email) | Python standard library only |
 | CSDF 2 (CAPTCHA) | **Pillow** (`pip install pillow`) |
 | CSDF 3 (WiFi) | Python standard library only |
+| CSDF 4 (recovery) | Python standard library only |
+| CSDF 5 (logs) | Python standard library only |
 | CSDF mini project | **Pillow** (`python3 -m pip install -r requirements.txt`) |
 | IR 1–5 | Python standard library only |
 | IR mini project | Python standard library only |
@@ -102,7 +115,7 @@ From the repository root:
 
 ```bash
 ./run_all.sh                # CSDF + IR + IR mini project
-./run_all.sh csdf           # CSDF 1-3 + CSDF image forensics demo
+./run_all.sh csdf           # CSDF 1-5 + CSDF image forensics demo
 ./run_all.sh csdf-project   # only the CSDF image forensics demo
 ./run_all.sh ir             # IR practicals 1-5
 ./run_all.sh project        # only the IR document summarizer
@@ -114,6 +127,8 @@ Individual programs:
 python3 CSDF/Practical1_Email_Header_Analysis/email_header_analysis.py
 python3 CSDF/Practical2_CAPTCHA/captcha.py
 python3 CSDF/Practical3_WiFi_Intrusion_Detection/wifi_intrusion_detection.py
+python3 CSDF/Practical4_Deleted_File_Partition_Recovery/forensic_recovery.py
+python3 CSDF/Practical5_Log_Capture_Event_Correlation/log_capture_correlation.py
 python3 CSDF/MiniProject_Image_Forensics/image_forensics.py --demo
 
 python3 IR/Practical1_Document_Similarity/document_similarity.py
@@ -700,6 +715,637 @@ Observations:
 | When exactly is a device blocked? | On the fifth failed attempt (`>= 5`). |
 | Why are whitelisted devices skipped? | Trusted infrastructure should never be auto-blocked. |
 | What is the attack called? | Brute-force / dictionary attack on the WiFi password. |
+
+---
+
+## CSDF Practical 4 — Deleted file and partition recovery
+
+**Folder:** `CSDF/Practical4_Deleted_File_Partition_Recovery/`
+**Main file:** `forensic_recovery.py`
+**Input:** `disk_image.dd` — a 9 MiB FAT16 evidence image generated on first run
+**Output:** `recovered/` (recovered files + repaired MBR) and
+`recovery_report.json`
+
+### Aim
+
+Write a computer forensic application that:
+
+1. reads a raw disk image **without modifying the evidence**,
+2. finds a partition whose MBR entry has been erased and rebuilds the entry,
+3. finds files that were deleted from a FAT16 file system and recovers their
+   data where it has not been overwritten,
+4. recovers files whose directory entry is gone by **file carving**, and
+5. records a SHA-256 hash for every recovered artefact.
+
+### Why the practical uses a disk image
+
+Recovering deleted files from a live disk normally means opening a block device
+such as `/dev/sda` through a **write blocker**, so that the forensic tool cannot
+change the evidence. That needs root privileges and can destroy the machine it
+runs on. This practical therefore generates a realistic FAT16 disk image and
+runs exactly the same byte-level logic on the image file. The code would work on
+any FAT16 image (`--image other.dd`).
+
+### FAT16 structures used
+
+| Region | Location | Purpose |
+|---|---|---|
+| Boot sector / BPB | sector 0 of the partition | geometry: bytes/sector, sectors/cluster, FAT size, root entries, total sectors |
+| FAT 1 and FAT 2 | after the reserved sector(s) | 16-bit cluster chains; two copies for redundancy |
+| Root directory | after the FATs | one 32-byte entry per file |
+| Data region | after the root directory | file contents, one cluster per sector in this demo |
+
+The data region starts at:
+
+```text
+data_start = reserved_sectors + fat_count × fat_sectors + root_dir_sectors
+```
+
+A FAT16 directory entry is 32 bytes:
+
+| Offset | Field |
+|---|---|
+| 0–7 | 8-character base name |
+| 8–10 | 3-character extension |
+| 11 | attributes (`0x20` archive, `0x10` directory, `0x08` volume label) |
+| 26–27 | first cluster number |
+| 28–31 | file size in bytes |
+
+### What deletion does
+
+A quick delete does **not** erase the file contents:
+
+- the first byte of the directory entry is replaced with `0xE5`,
+- the FAT chain for the file is set to `0` (clusters marked free),
+- the start cluster and size remain in the directory entry.
+
+The data remains until another file is allocated into those clusters. Therefore
+"permanently deleted" really means **overwritten**, not merely removed from the
+directory. The demo contains one file whose clusters were explicitly zeroed to
+show the unrecoverable case.
+
+### The evidence image
+
+| Partition | MBR entry | Contents |
+|---|---|---|
+| `CASE_A`, LBA 2048 | present, type `0x0E` | `LIVE.TXT`, deleted `NOTES.TXT`, deleted `PHOTO.JPG`, deleted + wiped `WIPED.JPG`, and an orphan JPEG with no directory entry |
+| `HIDDEN`, LBA 10240 | **erased** | `REPORT.PDF`, deleted `LEDGER.TXT` |
+
+The second partition is fully formatted with a valid boot sector and FATs — only
+its 16-byte MBR slot is zeroed. That is exactly what a deleted partition looks
+like: the file system is still on disk, but the partition table no longer points
+to it.
+
+### Code walkthrough
+
+#### 1. Building the image
+
+`_boot_sector()` writes the BIOS Parameter Block field by field and finishes
+with the `0x55AA` signature:
+
+```python
+boot[0:3] = b"\xeb\x3c\x90"          # jump instruction
+boot[3:11] = b"MSWIN4.1"             # OEM name
+struct.pack_into("<H", boot, 11, 512)  # bytes per sector
+boot[13] = 1                         # sectors per cluster
+struct.pack_into("<H", boot, 14, 1)  # reserved sectors
+boot[16] = 2                         # two FAT copies
+struct.pack_into("<H", boot, 22, 32) # FAT size in sectors
+boot[54:62] = b"FAT16   "
+boot[510:512] = b"\x55\xaa"
+```
+
+`build_fat16_partition()` allocates clusters sequentially, writes both FAT
+copies and fills the root directory. The two partition byte strings are copied
+into a 9 MiB `bytearray` and the MBR is written at offsets `446 + 16 × slot`.
+
+#### 2. Simulating deletion
+
+```python
+entries.append(_dir_entry(spec["name"], start, len(spec["data"]),
+                          deleted=spec.get("deleted", False)))
+if spec.get("deleted", False):
+    for cluster in range(start, start + clusters):
+        fat[cluster] = 0             # chain is freed
+if spec.get("wipe", False):
+    volume[offset:offset + clusters * CLUSTER_SIZE] = b"\x00" * ...
+```
+
+Setting the FAT entries to zero is what makes metadata-based recovery harder:
+the original **chain** is lost. Because these demo files were written as one
+contiguous run, the recovery code can still read `size` bytes starting at the
+recorded first cluster — the same assumption used by many real recovery tools
+for unfragmented files.
+
+#### 3. Partition recovery
+
+`read_mbr_partitions()` reads the four 16-byte slots at offset 446. A slot is
+skipped when its type byte is `0`. Then `scan_for_boot_sectors()` checks every
+512-byte sector:
+
+```python
+if sector[510:512] != b"\x55\xaa":
+    continue
+geometry = parse_boot_sector(sector)
+```
+
+The `0x55AA` signature alone is not enough, because boot code and random data
+can contain it. `parse_boot_sector()` validates the geometry:
+
+- bytes per sector must be 512,
+- sectors per cluster must be a power of two from 1 to 64,
+- reserved sectors, FAT count, root entries, FAT size and total sectors must be
+  plausible,
+- the file-system type string must contain `FAT`,
+- the computed cluster count must be positive.
+
+A boot sector that is inside a live MBR partition is reported as allocated; one
+that is outside all MBR partitions is a **deleted partition**. The tool writes
+`recovered/recovered_mbr.bin`, a copy of the MBR with the missing entry filled
+in, but never touches `disk_image.dd` itself.
+
+#### 4. Directory-entry recovery
+
+`directory_entries()` walks the fixed-size root directory until the `0x00`
+end-of-directory marker. For every entry whose first byte is `0xE5`:
+
+```python
+name = entry_name(raw)              # first character cannot be recovered
+start_cluster = struct.unpack_from("<H", raw, 26)[0]
+size = struct.unpack_from("<I", raw, 28)[0]
+data, status, reason = read_deleted_file(...)
+```
+
+`entry_name()` replaces the lost first character with `_`, which is why the
+output shows `_OTES.TXT` instead of `NOTES.TXT`.
+
+`read_deleted_file()` reads `ceil(size / cluster_size)` clusters contiguously
+from the first cluster and tests two overwrite conditions:
+
+```python
+if clusters & used_clusters:
+    return data, "OVERWRITTEN", "clusters were reused by a live file"
+if not data or all(byte == 0 for byte in data):
+    return data, "OVERWRITTEN", "data area is filled with zeros"
+return data, "RECOVERED", "contiguous clusters were still intact"
+```
+
+`used_clusters` is built from all **live** directory entries, so if a later file
+now owns the same clusters the deleted file is correctly declared lost.
+
+#### 5. File carving
+
+Carving ignores the file system completely and searches raw bytes for known
+headers and footers:
+
+| Type | Header | Footer |
+|---|---|---|
+| JPEG | `FF D8 FF` | `FF D9` |
+| PNG | `89 50 4E 47 0D 0A 1A 0A` | `IEND` + `AE 42 60 82` |
+| PDF | `%PDF-` | `%%EOF` |
+
+Before writing a carved file, `carve_files()` checks whether the offset lies
+inside a range already covered by a directory entry (live or deleted). This
+prevents duplicates: the deleted `PHOTO.JPG` is recovered from metadata, while
+the JPEG with no directory entry is recovered by carving as `carved_001.jpg`.
+Carving recovers **content but not the original name, timestamps or path**.
+
+#### 6. Hashing and reporting
+
+Every output file is hashed with SHA-256 and recorded in
+`recovery_report.json` together with the evidence image hash, partition list,
+deleted entries and carved offsets. Hashing demonstrates integrity: the same
+bytes produce the same digest, so a later change to an artefact is detectable.
+
+### Actual output
+
+```text
+======================================================================
+       DELETED FILE AND PARTITION RECOVERY - FORENSIC REPORT
+======================================================================
+Evidence image : disk_image.dd
+Image size     : 9,437,184 bytes (9.00 MiB, 18,432 sectors)
+SHA-256        : 51758983dfed18ec0a29a642e2fb4059d8c3b192e9e4f19b102d0ab0113d0c9d
+Acquisition    : working on the image only, source is not changed
+
+----------------------------------------------------------------------
+[1] MBR PARTITION TABLE
+----------------------------------------------------------------------
+Slot  Type   Status       Start LBA   Sectors        Size
+1     0x0E   ACTIVE            2048      8192     4.00 MiB
+
+3 partition slot(s) are empty - one of them is the deleted partition.
+
+----------------------------------------------------------------------
+[2] DELETED PARTITION RECOVERY (boot-sector scan)
+----------------------------------------------------------------------
+Scanned 18,432 sectors, found 2 FAT16 boot sector(s).
+  LBA   2048  FAT16    label=CASE_A     status=allocated (live partition)
+  LBA  10240  FAT16    label=HIDDEN     status=DELETED PARTITION
+           size=4,194,304 bytes, 8,123 clusters, volume label 'HIDDEN'
+
+  Wrote repaired MBR copy -> recovered/recovered_mbr.bin
+  (the original disk_image.dd was not modified)
+
+----------------------------------------------------------------------
+[3] DELETED FILE RECOVERY (FAT16 directory entries)
+----------------------------------------------------------------------
+
+Partition 1: label=CASE_A start=LBA 2048  (FAT16)
+  live files      : LIVE.TXT (30 bytes)
+  [1] _OTES.TXT         180 bytes  RECOVERED -> recovered/P1_deleted__OTES.TXT
+      SHA-256 207d8a7fc959db6a78bd61962523dd6803c5797dc08f0646a7cafe1eb96364dc
+  [2] _HOTO.JPG        2198 bytes  RECOVERED -> recovered/P1_deleted__HOTO.JPG
+      SHA-256 c109b4e50b10bcb317ed35a2141d3697a497c7c02123f23f2b137961abf4dbd3
+  [3] _IPED.JPG        1498 bytes  UNRECOVERABLE (data area is filled with zeros)
+
+Partition 2: label=HIDDEN start=LBA 10240  (FAT16)
+  live files      : REPORT.PDF (1901 bytes)
+  [1] _EDGER.TXT        180 bytes  RECOVERED -> recovered/P2_deleted__EDGER.TXT
+      SHA-256 5f09744097233d7cc43184391a9a9f48b32edb788e75bca4cc3243fd5d7a84f1
+
+----------------------------------------------------------------------
+[4] FILE CARVING (no directory entry - signature scan)
+----------------------------------------------------------------------
+  signature at offset 0x108E00 belongs to 'P1/_HOTO.JPG' - already handled, skipping
+  signature at offset 0x508A00 belongs to 'P2/REPORT.PDF' - already handled, skipping
+  carved_001.jpg     offset=0x00109E00 (LBA   2127)  size= 1798 bytes
+      SHA-256 f4448c24772bd06eeabcf12aa450528b89c44dcdd92602d1a032c5c1a236a3ec
+
+----------------------------------------------------------------------
+[5] SUMMARY
+----------------------------------------------------------------------
+Live partitions              : 1
+Deleted partitions recovered : 1
+Deleted files found          : 4
+  recovered from metadata    : 3
+  permanently overwritten    : 1
+Files recovered by carving   : 1
+Output folder                : recovered
+Report                       : recovery_report.json
+```
+
+### How to read the result
+
+- **Three deleted files were recovered from metadata** (`_OTES.TXT`,
+  `_HOTO.JPG`, `_EDGER.TXT`) because their data clusters had not been reused.
+- **One deleted file was not recoverable** (`_IPED.JPG`): its clusters were
+  zeroed, which is what secure deletion or cluster reuse does.
+- **One orphan JPEG was carved** from raw bytes even though no directory entry
+  points to it. Its original name is unknown, so it becomes `carved_001.jpg`.
+- **The deleted partition was reconstructed** at LBA 10240 from its boot
+  sector, and a repaired MBR copy was produced.
+- The evidence image hash is recorded before recovery and the image is never
+  written to during the run.
+
+### Limitations and realistic extensions
+
+- FAT16 only; NTFS keeps deleted records in the `$MFT`, ext4 uses inodes and
+  journaling, and APFS uses snapshots. Commercial tools (Autopsy/The Sleuth
+  Kit, `TestDisk`, `PhotoRec`, `foremost`) support many file systems.
+- Deleted files are assumed to be **contiguous** after the FAT chain is lost;
+  a fragmented deleted file needs a smarter carving/reconstruction algorithm.
+- Only three signatures are implemented. Real carving uses hundreds of
+  signatures and validates candidate files more strictly.
+- Long file names (VFAT `0x0F` entries) and subdirectories are not restored.
+- SSDs with TRIM may erase deleted blocks almost immediately, making recovery
+  impossible even when the directory entry still exists.
+- A production workflow would image the device with `dd`/`dc3dd`, verify the
+  hash, work on a write-blocked copy, and keep an audit log.
+
+### Viva points
+
+| Question | Short answer |
+|---|---|
+| What happens on a FAT delete? | The directory entry's first byte becomes `0xE5` and the FAT chain is freed; data stays on disk. |
+| Why can a deleted file often be recovered? | Deletion removes metadata pointers, not the contents. Contents survive until the clusters are overwritten. |
+| When is recovery impossible? | When the data clusters have been reused, zeroed, trimmed or encrypted. |
+| How is a deleted partition found? | Scan for a valid FAT boot sector (`0x55AA` + sane BPB) outside the current MBR partitions. |
+| Why validate the BPB? | `0x55AA` also appears in boot code and random data; geometry checks remove false positives. |
+| Why replace the first name character with `_`? | `0xE5` overwrites that byte, so the original character is lost. |
+| What is file carving? | Recovering a file by its header/footer signature without relying on file-system metadata. |
+| What does carving not recover? | The original file name, timestamps, path and fragmentation information. |
+| Why hash every recovered file? | To prove integrity and support the chain of custody. |
+| Difference between quick format and secure erase? | Quick format removes metadata; secure erase overwrites the data. |
+
+---
+
+## CSDF Practical 5 — Log capture and event correlation
+
+**Folder:** `CSDF/Practical5_Log_Capture_Event_Correlation/`
+**Main file:** `log_capture_correlation.py`
+**Inputs:** `logs/auth.log`, `logs/firewall.log`, `logs/web_access.log`
+**Output:** `output/captured_events.jsonl`, `output/log_manifest.json`,
+`output/correlation_report.json`
+
+### Aim
+
+Capture logs from three different sources, convert every record into one
+common event schema, apply detection rules over sliding time windows, and
+correlate alerts that share a source IP into a single incident with a timeline
+and recommended actions.
+
+### Why correlation matters
+
+A single log line rarely proves an attack. Five failed SSH logins are
+suspicious; a port scan before them and a successful login afterwards tell a
+much stronger story. A **SIEM** (Security Information and Event Management
+system) performs the same three stages:
+
+```text
+collect -> normalise -> detect -> correlate -> alert/report
+```
+
+This practical implements all five stages in one standalone Python file.
+
+### Input formats
+
+`auth.log` uses the Linux syslog format:
+
+```text
+Aug 14 10:13:50 webserver sshd[2092]: Failed password for invalid user admin from 203.0.113.45 port 50110 ssh2
+```
+
+`firewall.log` is a simple firewall export:
+
+```text
+2026-08-14T10:13:10Z FW01 DENY TCP 203.0.113.45 10.0.0.5 44001 21
+```
+
+`web_access.log` is the Apache/Nginx combined format:
+
+```text
+203.0.113.45 - - [14/Aug/2026:10:17:10 +0000] "GET /admin/login.php HTTP/1.1" 404 512 "-" "sqlmap/1.7"
+```
+
+The sample data describes one coordinated attack:
+
+| Time | Source | Activity |
+|---|---|---|
+| 10:13:10–10:13:30 | firewall | six denied connections to ports 21, 22, 23, 80, 443, 3306 |
+| 10:13:50–10:14:23 | auth | five failed SSH logins for `admin`, `root`, `oracle`, `test`, `ubuntu` |
+| 10:15:40 | auth | successful SSH login as `deploy` from the same IP |
+| 10:17:10–10:17:35 | web | six 404 requests for admin/backup paths |
+| 10:18:00–10:18:16 | web | a second IP probes `/.git/config`, `/server-status`, `/cgi-bin/test.cgi` |
+
+There is also normal traffic from `10.0.0.22` and `10.0.0.30`, plus a cron
+session, so the detector has to separate noise from the attack.
+
+### Stage 1 — Capture
+
+`capture_logs()` reads each source, hashes the **raw text before parsing** and
+records the hash in `log_manifest.json`:
+
+```python
+hashlib.sha256(raw_text.encode()).hexdigest()
+```
+
+Hashing before capture is the digital-forensics equivalent of sealing evidence:
+if the file changes later, its hash no longer matches the manifest. In a real
+deployment the collection stage would read from `syslog`, `journald`, a
+database or an agent such as Filebeat/Wazuh instead of text files.
+
+### Stage 2 — Normalise
+
+Every parser returns the same dictionary shape:
+
+| Field | Meaning |
+|---|---|
+| `id` | `EVT-0001`, assigned after sorting by time |
+| `timestamp`, `epoch` | UTC ISO string and numeric epoch for comparisons |
+| `source` | `auth`, `firewall` or `web` |
+| `event` | `ssh_login_failure`, `firewall_deny`, `web_request`, … |
+| `src_ip` | source address used for correlation |
+| `user`, `action`, `method`, `path`, `status` | source-specific details |
+| `dst_ip`, `dst_port` | firewall destination |
+| `raw`, `line` | original evidence line and line number |
+
+Two time-normalisation details matter:
+
+- syslog has **no year and no time zone**, so the demo assumes UTC and the fixed
+  year 2026 (`LOG_YEAR`). A real collector takes the year from the file
+  rotation metadata or the receiving host clock.
+- Apache timestamps include `+0530`/`+0000`. `datetime.strptime(..., "%z")`
+  parses the offset and `.astimezone(timezone.utc)` converts it, so all events
+  share one timeline.
+
+Without this step, `10:15` in one log and `10:15` in another could refer to
+different real times, and correlation would produce false matches.
+
+### Stage 3 — Detect with sliding windows
+
+| Rule | Condition | Severity | MITRE technique |
+|---|---|---|---|
+| `PORT_SCAN` | ≥ 5 distinct denied destination ports from one IP in 60 s | MEDIUM | T1595 Active Scanning |
+| `SSH_BRUTE_FORCE` | ≥ 3 failed SSH logins from one IP in 120 s | HIGH | T1110 Brute Force |
+| `LOGIN_AFTER_FAILURES` | successful SSH login after ≥ 3 failures in 15 min | CRITICAL | T1078 Valid Accounts |
+| `WEB_SCAN` | ≥ 3 distinct 4xx paths from one IP in 120 s | MEDIUM | T1083 File and Directory Discovery |
+
+`first_window()` is the core of every rule:
+
+```python
+for start in range(len(events)):
+    window = [event for event in events[start:]
+              if event["epoch"] - events[start]["epoch"] <= window_seconds]
+    count = len({event[distinct_key] for event in window}) ...
+    if count >= threshold:
+        return window
+```
+
+A sliding window is important. Counting failures over the whole file would
+eventually flag any user who mistypes a password occasionally. The window asks
+a sharper question: *did many bad things happen close together in time?*
+For port scans and web scans the code counts **distinct** ports/paths, not raw
+lines, because one path requested six times is not a scan.
+
+For `LOGIN_AFTER_FAILURES`, the alert is anchored at the successful login time
+(`first=success`), while the count still includes the preceding failures. This
+keeps the incident timeline in the correct order.
+
+### Stage 4 — Correlate into incidents
+
+`correlate()` groups alerts by `src_ip` and merges alerts whose gap is at most
+`CORRELATION_WINDOW = 15 minutes`:
+
+```python
+if alert["first"] - previous_end <= CORRELATION_WINDOW:
+    clusters[-1].append(alert)
+else:
+    clusters.append([alert])
+```
+
+Each incident gets:
+
+- the **maximum** severity among its alerts,
+- a risk score = sum of alert scores, capped at 100
+  (`MEDIUM=15`, `HIGH=30`, `CRITICAL=40`),
+- the ordered attack stages,
+- every event from that IP inside the incident window,
+- recommendations generated from the rules that fired.
+
+This is why the output shows one `INC-001` for `203.0.113.45` rather than four
+unrelated alerts. The stages read as a coherent attack chain:
+
+```text
+Reconnaissance -> Credential access -> Initial access -> Discovery
+```
+
+The second IP, `198.51.100.7`, only produces a web-scan alert and therefore a
+single-stage MEDIUM incident. It had two SSH failures, which is deliberately
+**below** the brute-force threshold — an example of threshold tuning to avoid
+false positives.
+
+### Stage 5 — Report and preserve
+
+The tool writes three files:
+
+- `captured_events.jsonl` — one normalised event per line, ready for a SIEM,
+- `log_manifest.json` — source names, line counts and raw SHA-256 hashes,
+- `correlation_report.json` — rules, alerts, incidents and summary stats.
+
+JSONL is used for the event stream because it can be appended one record at a
+time and streamed into tools such as Elasticsearch, Splunk or a pandas
+DataFrame without loading the whole file into memory.
+
+### Actual output
+
+```text
+========================================================================
+           LOG CAPTURE AND EVENT CORRELATION REPORT
+========================================================================
+
+------------------------------------------------------------------------
+[1] LOG CAPTURE
+------------------------------------------------------------------------
+Source     File                  Lines  Events  SHA-256 (first 16)
+auth       auth.log                 15      15  e8bcbca229372b20
+firewall   firewall.log             10      10  4ea5a81d26ecf49c
+web        web_access.log           11      11  9afd2e601c2ec606
+
+Total normalised events: 36
+
+------------------------------------------------------------------------
+[2] NORMALISED EVENT STREAM (first 8 events)
+------------------------------------------------------------------------
+  EVT-0001  2026-08-14T10:12:30Z  auth       ssh_login_success     src=10.0.0.22  user=alice
+  EVT-0002  2026-08-14T10:12:31Z  auth       ssh_session_opened    user=alice
+  EVT-0003  2026-08-14T10:12:35Z  web        web_request           src=10.0.0.22  GET /dashboard -> 200
+  EVT-0004  2026-08-14T10:12:40Z  firewall   firewall_allow        src=10.0.0.22  dport=22
+  EVT-0005  2026-08-14T10:12:55Z  auth       ssh_session_closed    user=alice
+  EVT-0006  2026-08-14T10:13:05Z  auth       ssh_login_failure     src=198.51.100.7  user=test
+  EVT-0007  2026-08-14T10:13:10Z  firewall   firewall_deny         src=203.0.113.45  dport=21
+  EVT-0008  2026-08-14T10:13:14Z  firewall   firewall_deny         src=203.0.113.45  dport=22
+  ... 28 more events, written to output/captured_events.jsonl
+
+------------------------------------------------------------------------
+[3] DETECTION RULES
+------------------------------------------------------------------------
+  1. PORT_SCAN              >= 5 denied destination ports from one IP within 60s
+     severity=MEDIUM    stage=Reconnaissance     MITRE=T1595 Active Scanning
+  2. SSH_BRUTE_FORCE        >= 3 failed SSH logins from one IP within 120s
+     severity=HIGH      stage=Credential access  MITRE=T1110 Brute Force
+  3. LOGIN_AFTER_FAILURES   successful SSH login after repeated failures from the same IP
+     severity=CRITICAL  stage=Initial access     MITRE=T1078 Valid Accounts
+  4. WEB_SCAN               >= 3 distinct 4xx web paths from one IP within 120s
+     severity=MEDIUM    stage=Discovery          MITRE=T1083 File and Directory Discovery
+
+------------------------------------------------------------------------
+[4] CORRELATED ALERTS
+------------------------------------------------------------------------
+Rule                    Source IP         Count  First    Last     Severity
+PORT_SCAN               203.0.113.45          6  10:13:10 10:13:30 MEDIUM
+SSH_BRUTE_FORCE         203.0.113.45          5  10:13:50 10:14:23 HIGH
+LOGIN_AFTER_FAILURES    203.0.113.45          5  10:15:40 10:15:40 CRITICAL
+WEB_SCAN                203.0.113.45          6  10:17:10 10:17:35 MEDIUM
+WEB_SCAN                198.51.100.7          3  10:18:00 10:18:16 MEDIUM
+
+------------------------------------------------------------------------
+[5] CORRELATED INCIDENTS
+------------------------------------------------------------------------
+INC-001  CRITICAL  score=100  source=203.0.113.45
+  Title    : Multi-stage intrusion from 203.0.113.45
+  Window   : 10:13:10 to 10:17:35 (4 alert(s), 19 related events)
+  Stages   : Reconnaissance -> Credential access -> Initial access -> Discovery
+  Timeline :
+    10:13:10  [MEDIUM  ] PORT_SCAN              6 denied connections to ports [21, 22, 23, 80, 443, 3306]
+    10:13:50  [HIGH    ] SSH_BRUTE_FORCE        5 failed logins for users ['admin', 'oracle', 'root', 'test', 'ubuntu']
+    10:15:40  [CRITICAL] LOGIN_AFTER_FAILURES   successful login as 'deploy' after 5 failed attempts
+    10:17:10  [MEDIUM  ] WEB_SCAN               6 error responses for paths ['/.env', '/admin/login.php', '/backup.zip', '/config.php', '/phpmyadmin/', '/wp-login.php']
+  Actions  :
+    - Block the source IP at the perimeter firewall and review which services are exposed.
+    - Enable key-based SSH authentication, rate-limit failed logins and deny the source IP.
+    - Treat the host as compromised: reset the account password, kill active sessions and collect volatile evidence before rebooting.
+    - Check the web server logs for any successful access to the scanned paths and update the WAF rules.
+    - Preserve the original log files and the SHA-256 manifest as evidence.
+
+INC-002  MEDIUM    score= 15  source=198.51.100.7
+  Title    : Web application scanning from 198.51.100.7
+  Window   : 10:18:00 to 10:18:16 (1 alert(s), 4 related events)
+  Stages   : Discovery
+  Timeline :
+    10:18:00  [MEDIUM  ] WEB_SCAN               3 error responses for paths ['/.git/config', '/cgi-bin/test.cgi', '/server-status']
+  Actions  :
+    - Check the web server logs for any successful access to the scanned paths and update the WAF rules.
+    - Preserve the original log files and the SHA-256 manifest as evidence.
+
+------------------------------------------------------------------------
+[6] SUMMARY
+------------------------------------------------------------------------
+Events captured          : 36
+Log sources              : 3
+Alerts raised            : 5
+Correlated incidents     : 2
+Critical incidents       : 1
+Highest risk source      : 203.0.113.45 (score 100, 19 events)
+Event stream             : output/captured_events.jsonl
+Evidence manifest        : output/log_manifest.json
+Correlation report       : output/correlation_report.json
+```
+
+### How to read the result
+
+- **36 events** were captured from **3 sources** and sorted into one timeline.
+- **Five alerts** came from four rules; the four alerts for `203.0.113.45`
+  were merged into one **CRITICAL** incident because they occurred within the
+  15-minute correlation window.
+- The attack chain is visible: scan → brute force → successful login →
+  web enumeration.
+- `198.51.100.7` produced only a **MEDIUM web-scan** incident. Its two SSH
+  failures did not reach the brute-force threshold, so the output shows how a
+  sliding window and per-rule thresholds limit noise.
+- The highest-risk source is `203.0.113.45`, with score 100 and 19 related
+  events.
+
+### Limitations and realistic extensions
+
+- The logs are **replayed from files**, not followed live. A real collector
+  tails files (`tail -f`), reads `journald`, or receives syslog over TCP.
+- Correlation here is **IP-based**. NAT, DHCP, VPNs and shared proxies can make
+  one IP represent many users; a real SIEM also correlates usernames, hostnames,
+  process IDs and asset criticality.
+- Thresholds are fixed and tuned to the sample. Production systems use
+  baselines, risk scoring, threat intelligence and machine learning.
+- Clock skew between hosts breaks time correlation. NTP and ingestion
+  timestamps are essential.
+- Logs can be forged or deleted by an attacker. The SHA-256 manifest helps
+  detect changes after capture, but it cannot prove the original log was
+  truthful.
+- A real deployment would send alerts to a ticketing/SOAR system and retain
+  evidence according to a legal retention policy.
+
+### Viva points
+
+| Question | Short answer |
+|---|---|
+| What is log correlation? | Linking events from different sources by shared attributes (IP, user, time) to detect a larger incident. |
+| Why normalise logs first? | Every source has a different format; a common schema enables comparisons and queries. |
+| Why use a sliding time window? | It detects bursts of activity without accumulating old events into false positives. |
+| Why count distinct ports/paths? | Repeated access to one port is not a scan. |
+| What is the difference between an alert and an incident? | An alert is one rule match; an incident groups related alerts. |
+| Why hash the logs at capture time? | To detect later tampering and preserve evidence integrity. |
+| What is MITRE ATT&CK? | A knowledge base of adversary tactics and techniques used to label detections. |
+| How can correlation fail? | NAT/shared IPs, clock skew, missing logs, too-high thresholds, attacker log tampering. |
+| Why store events as JSONL? | One self-contained record per line; easy to stream and append. |
 
 ---
 
@@ -2511,6 +3157,8 @@ i.e. **74.9% smaller**.
 | CSDF 1 — Email header | Parse headers, trace `Received`, find sender IP, detect phishing | domain mismatch / suspicious words / link domain | `203.0.113.45`, 3 warnings, phishing verdict |
 | CSDF 2 — CAPTCHA | Generate noisy image, verify user text | `answer.strip().upper() == expected.upper()` | random 5-char text, 3 attempts |
 | CSDF 3 — WiFi IDS | Count failures per MAC, block brute force | block when failures `>= 5` | `...:99` blocked after 5 failures |
+| CSDF 4 — Recovery | Parse FAT16, carve signatures, rebuild MBR | first byte `0xE5` + valid BPB + JPEG/PDF signatures | **3** files from metadata, **1** carved, **1** deleted partition |
+| CSDF 5 — Log correlation | Normalise 3 sources, sliding-window rules, merge by IP | thresholds + 15-minute correlation window | **36** events, **5** alerts, **2** incidents, score 100 |
 | CSDF mini — Image forensics | Hashes, EXIF, ELA, noise, dHash, score | `S = 100(0.25E + 0.25N + 0.30L + 0.20M)` | original 25 LOW, tampered 64 HIGH |
 | IR 1 — Document similarity | Cosine of word-count vectors | `sim = (w1·w2)/(‖w1‖‖w2‖)` | **0.8820 (88.20%)** very similar |
 | IR 2 — PageRank | Random-surfer link analysis | `PR(p) = (1−d)/N + d Σ PR(q)/L(q)` | **C = 0.3941** |
@@ -2527,9 +3175,10 @@ i.e. **74.9% smaller**.
 | `list` | `Received` headers, crawler queue, mapped pairs | ordered sequence |
 | `set` | blocked MACs, visited URLs, topic pages, common words | fast membership + no duplicates |
 | `Counter` | document similarity, summarizer | counting with O(1) lookup |
-| `defaultdict(list)` | Map-Reduce shuffle | auto-create groups |
+| `defaultdict(list)` | Map-Reduce shuffle, log grouping by IP | auto-create groups |
+| `bytearray` | FAT16 image builder, carved files | mutable raw sector data |
 | `queue` via list `pop(0)` | crawler | BFS |
-| XML tree | Practical 5 | parse nested page/link structure |
+| XML tree | IR Practical 5 | parse nested page/link structure |
 
 ## 3. Complexity cheat sheet
 
@@ -2538,6 +3187,8 @@ i.e. **74.9% smaller**.
 | Email parser | O(header size) | O(headers) |
 | CAPTCHA | O(pixels + characters) | O(image) |
 | WiFi IDS | O(number of log lines) | O(number of MACs) |
+| Deleted file recovery | O(image size) for carving + O(entries) for metadata | O(image size) |
+| Log correlation | O(alerts × window) for detection + O(events) | O(events) |
 | Image forensics | O(pixels) for ELA/noise + O(blocks log blocks) for median | O(image + blocks) |
 | Document similarity | O(words in both docs) | O(vocabulary) |
 | PageRank | O(iterations × N²) in this code | O(N) |
@@ -2559,9 +3210,9 @@ i.e. **74.9% smaller**.
    ├─ 1 email header                           ├─ 1 cosine similarity
    ├─ 2 CAPTCHA                                ├─ 2 PageRank
    ├─ 3 WiFi IDS                               ├─ 3 Map-Reduce
-   └─ mini: image forensics                    ├─ 4 web crawler
-                                               ├─ 5 XML topic PageRank
-                                               └─ mini: summarizer
+   ├─ 4 file/partition recovery                ├─ 4 web crawler
+   ├─ 5 log correlation                        ├─ 5 XML topic PageRank
+   └─ mini: image forensics                    └─ mini: summarizer
 ```
 
 All scripts are independent, but they share a common teaching progression:
@@ -2587,12 +3238,24 @@ All scripts are independent, but they share a common teaching progression:
    random and limited to three attempts.
 4. **What is a brute-force attack in the WiFi practical?** Repeated password
    guesses; the detector blocks after five failures.
-5. **What does ELA measure?** The difference between the image and a
+5. **What happens when a file is deleted in FAT16?** The directory entry's
+   first byte becomes `0xE5` and the FAT chain is freed; the data stays until
+   its clusters are overwritten.
+6. **How is a deleted partition recovered?** Scan for a valid FAT boot sector
+   signature (`0x55AA` + sane BPB) that is not inside any current MBR
+   partition, then rebuild the MBR entry.
+7. **What is log correlation?** Grouping events from multiple log sources by
+   shared attributes such as source IP and time to detect a multi-stage
+   incident.
+8. **Why normalise logs before correlation?** Each source has a different
+   format and time zone; a common schema and UTC timestamps are required for
+   correct comparisons.
+9. **What does ELA measure?** The difference between the image and a
    re-compressed copy; edited regions often have a different error level.
-6. **Why use median/MAD?** Robustness against extreme blocks.
-7. **What is a perceptual hash?** A compact fingerprint of visual content that
+10. **Why use median/MAD?** Robustness against extreme blocks.
+11. **What is a perceptual hash?** A compact fingerprint of visual content that
    survives resizing/re-saving.
-8. **What is chain of custody?** Documented, tamper-evident handling of
+12. **What is chain of custody?** Documented, tamper-evident handling of
    evidence; hashes prove the file was not changed.
 
 **IR**
@@ -2620,6 +3283,8 @@ All scripts are independent, but they share a common teaching progression:
 python3 CSDF/Practical1_Email_Header_Analysis/email_header_analysis.py
 python3 CSDF/Practical2_CAPTCHA/captcha.py                 # needs Pillow; type the text
 python3 CSDF/Practical3_WiFi_Intrusion_Detection/wifi_intrusion_detection.py
+python3 CSDF/Practical4_Deleted_File_Partition_Recovery/forensic_recovery.py
+python3 CSDF/Practical5_Log_Capture_Event_Correlation/log_capture_correlation.py
 python3 CSDF/MiniProject_Image_Forensics/image_forensics.py --demo
 
 # 2. IR

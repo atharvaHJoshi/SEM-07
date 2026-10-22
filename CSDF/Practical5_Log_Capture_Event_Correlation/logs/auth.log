@@ -1,0 +1,15 @@
+Aug 14 10:12:30 webserver sshd[2090]: Accepted password for alice from 10.0.0.22 port 51000 ssh2
+Aug 14 10:12:31 webserver sshd[2090]: session opened for user alice
+Aug 14 10:12:55 webserver sshd[2090]: session closed for user alice
+Aug 14 10:13:05 webserver sshd[2091]: Failed password for invalid user test from 198.51.100.7 port 40220 ssh2
+Aug 14 10:13:50 webserver sshd[2092]: Failed password for invalid user admin from 203.0.113.45 port 50110 ssh2
+Aug 14 10:13:58 webserver sshd[2092]: Failed password for invalid user root from 203.0.113.45 port 50111 ssh2
+Aug 14 10:14:06 webserver sshd[2093]: Failed password for invalid user oracle from 203.0.113.45 port 50112 ssh2
+Aug 14 10:14:15 webserver sshd[2093]: Failed password for invalid user test from 203.0.113.45 port 50113 ssh2
+Aug 14 10:14:23 webserver sshd[2094]: Failed password for invalid user ubuntu from 203.0.113.45 port 50114 ssh2
+Aug 14 10:15:40 webserver sshd[2095]: Accepted password for deploy from 203.0.113.45 port 50140 ssh2
+Aug 14 10:15:41 webserver sshd[2095]: session opened for user deploy
+Aug 14 10:16:10 webserver sshd[2096]: Failed password for alice from 198.51.100.7 port 40221 ssh2
+Aug 14 10:16:20 webserver sshd[2096]: Failed password for alice from 198.51.100.7 port 40222 ssh2
+Aug 14 10:17:45 webserver sshd[2095]: session closed for user deploy
+Aug 14 10:30:00 webserver cron[3001]: session opened for user root

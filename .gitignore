@@ -12,6 +12,12 @@ CSDF/Practical2_CAPTCHA/captcha_output*.png
 # Image forensics reports / generated output
 CSDF/MiniProject_Image_Forensics/output/
 
+# Practical 4 / 5 generated artefacts
+CSDF/Practical4_Deleted_File_Partition_Recovery/disk_image.dd
+CSDF/Practical4_Deleted_File_Partition_Recovery/recovered/
+CSDF/Practical4_Deleted_File_Partition_Recovery/recovery_report.json
+CSDF/Practical5_Log_Capture_Event_Correlation/output/
+
 # OS / editor junk
 .DS_Store
 Thumbs.db
